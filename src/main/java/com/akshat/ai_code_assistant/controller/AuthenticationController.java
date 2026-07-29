@@ -1,6 +1,6 @@
 package com.akshat.ai_code_assistant.controller;
 
-import com.akshat.ai_code_assistant.Exception.InvalidCredentialException;
+import com.akshat.ai_code_assistant.exception.InvalidCredentialException;
 import com.akshat.ai_code_assistant.dto.AuthResponse;
 import com.akshat.ai_code_assistant.dto.LoginRequest;
 import com.akshat.ai_code_assistant.dto.RegisterRequest;
