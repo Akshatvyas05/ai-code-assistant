@@ -67,8 +67,6 @@ jobs:
           cache: gradle
 
       - name: OWASP Dependency Check (fail on high/critical)
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: ./gradlew dependencyCheckAnalyze
 
       - name: Upload dependency-check report
