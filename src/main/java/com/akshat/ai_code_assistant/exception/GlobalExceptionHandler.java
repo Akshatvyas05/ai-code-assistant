@@ -1,4 +1,4 @@
-package com.akshat.ai_code_assistant.Exception;
+package com.akshat.ai_code_assistant.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
