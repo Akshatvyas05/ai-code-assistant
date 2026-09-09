@@ -43,4 +43,6 @@ dependencyCheck {
 	failBuildOnCVSS = 7
 	// Read from env var so the key never appears in source control
 	nvd.apiKey = System.getenv('NVD_API_KEY')
+	// Fixed, cacheable location so CI can persist the NVD feed across runs
+	data.directory = "${System.getProperty('user.home')}/.gradle/dependency-check-data"
 }
