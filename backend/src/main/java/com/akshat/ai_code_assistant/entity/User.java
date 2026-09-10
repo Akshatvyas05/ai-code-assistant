@@ -23,6 +23,8 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    private String role;
+
     // Required by JPA specification
     public User() {
     }
@@ -77,5 +79,13 @@ public class User {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public void setRole(String role){
+        this.role=role;
+    }
+
+    public String getRole(){
+        return role;
     }
 }

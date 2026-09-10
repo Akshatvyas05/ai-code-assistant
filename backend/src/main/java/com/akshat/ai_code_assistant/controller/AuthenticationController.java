@@ -14,10 +14,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
@@ -46,15 +43,17 @@ public class AuthenticationController {
 
         User user = new User(request.name(), request.email(), hashedPassword);
 
+        user.setRole("USER");
+
         User savedUser = userRepository.save(user);
 
         UserResponse response = new UserResponse(
                 savedUser.getId(),
                 savedUser.getName(),
                 savedUser.getEmail(),
-                savedUser.getCreatedAt()
+                user.getRole(), savedUser.getCreatedAt()
         );
-        String token = jwtService.generateToken(savedUser.getEmail());
+        String token = jwtService.generateToken(savedUser.getEmail(),savedUser.getRole());
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(new AuthResponse(token, refreshToken.getToken(), response));
@@ -70,11 +69,13 @@ public class AuthenticationController {
                 user.getId(),
                 user.getName(),
                 user.getEmail(),
+                user.getRole(),
                 user.getCreatedAt()
         );
-        String token = jwtService.generateToken(user.getEmail());
+        String token = jwtService.generateToken(user.getEmail(),user.getRole());
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
         return ResponseEntity.ok(new AuthResponse(token, refreshToken.getToken(), response));
     }
+
 }
