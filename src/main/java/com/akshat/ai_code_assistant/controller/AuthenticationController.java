@@ -54,7 +54,6 @@ public class AuthenticationController {
                 user.getRole(), savedUser.getCreatedAt()
         );
         String token = jwtService.generateToken(savedUser.getEmail(),savedUser.getRole());
-        String token = jwtService.generateToken(savedUser.getEmail());
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(new AuthResponse(token, refreshToken.getToken(), response));
@@ -74,7 +73,6 @@ public class AuthenticationController {
                 user.getCreatedAt()
         );
         String token = jwtService.generateToken(user.getEmail(),user.getRole());
-        String token = jwtService.generateToken(user.getEmail());
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
         return ResponseEntity.ok(new AuthResponse(token, refreshToken.getToken(), response));
