@@ -2,6 +2,7 @@ package com.akshat.ai_code_assistant.service;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import com.akshat.ai_code_assistant.entity.Role;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
 
@@ -19,9 +20,10 @@ public class JwtService {
         return Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(String email){
+    public String generateToken(String email, Role role){
         return Jwts.builder()
                 .subject(email)
+                .claim("role", role.name())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
                 .signWith(getSigningKey())
@@ -30,6 +32,11 @@ public class JwtService {
 
     public String extractEmail(String token){
         return getClaims(token).getSubject();
+    }
+
+    public Role extractRole(String token){
+        String role = getClaims(token).get("role", String.class);
+        return role == null ? Role.USER : Role.valueOf(role);
     }
 
     public boolean isTokenValid(String token){
