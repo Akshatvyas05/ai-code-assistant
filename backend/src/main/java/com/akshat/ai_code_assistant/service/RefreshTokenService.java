@@ -58,7 +58,8 @@ public class RefreshTokenService {
     /**
      * Rotate Refresh Token: Revoke current token, check reuse, issue new pair
      */
-    @Transactional
+    // noRollbackFor: the reuse/expiry branches delete tokens and then throw; the deletes must commit
+    @Transactional(noRollbackFor = InvalidCredentialException.class)
     public AuthResponse rotateRefreshToken(String requestToken) {
         RefreshToken token = refreshTokenRepository.findByToken(requestToken)
                 .orElseThrow(() -> new InvalidCredentialException("Invalid or expired refresh token"));
