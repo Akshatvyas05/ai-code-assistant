@@ -39,6 +39,10 @@ public class JwtService {
         return role == null ? Role.USER : Role.valueOf(role);
     }
 
+    public Date extractIssuedAt(String token){
+        return getClaims(token).getIssuedAt();
+    }
+
     public boolean isTokenValid(String token){
         try {
             return !getClaims(token).getExpiration().before(new Date());
