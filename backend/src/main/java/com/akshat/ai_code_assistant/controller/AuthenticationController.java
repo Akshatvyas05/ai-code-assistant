@@ -13,6 +13,7 @@ import com.akshat.ai_code_assistant.service.RefreshTokenService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -58,6 +59,14 @@ public class AuthenticationController {
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(new AuthResponse(token, refreshToken.getToken(), response));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(Authentication authentication){
+        User user = userRepository.findByEmail((String) authentication.getPrincipal())
+                .orElseThrow(() -> new InvalidCredentialException("Invalid email or password"));
+        refreshTokenService.logout(user);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/login")

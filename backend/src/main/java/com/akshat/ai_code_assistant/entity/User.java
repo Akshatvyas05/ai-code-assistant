@@ -1,6 +1,7 @@
 package com.akshat.ai_code_assistant.entity;
 
 import jakarta.persistence.*;
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -23,6 +24,10 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, columnDefinition = "varchar(20) default 'USER'")
     private Role role = Role.USER;
+
+    // Access tokens issued at or before this instant are rejected (set on logout)
+    @Column(name = "tokens_valid_after")
+    private Instant tokensValidAfter;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -81,6 +86,14 @@ public class User {
 
     public void setRole(Role role) {
         this.role = role;
+    }
+
+    public Instant getTokensValidAfter() {
+        return tokensValidAfter;
+    }
+
+    public void setTokensValidAfter(Instant tokensValidAfter) {
+        this.tokensValidAfter = tokensValidAfter;
     }
 
     public LocalDateTime getCreatedAt() {
