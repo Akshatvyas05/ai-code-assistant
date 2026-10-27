@@ -69,7 +69,7 @@ public class RefreshTokenService {
         refreshTokenRepository.save(token);
 
         // 4. ISSUE NEW TOKENS
-        String newAccessToken = jwtService.generateToken(user.getEmail());
+        String newAccessToken = jwtService.generateToken(user.getEmail(), user.getRole());
         RefreshToken newRefreshToken = createRefreshToken(user);
 
         UserResponse userResponse = new UserResponse(
