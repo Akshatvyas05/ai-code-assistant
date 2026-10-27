@@ -1,6 +1,8 @@
 package com.akshat.ai_code_assistant.exception;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,6 +23,33 @@ public class GlobalExceptionHandler {
         );
         problemDetail.setTitle("Authentication Failed");
         problemDetail.setType(URI.create("https://api.example.com/errors/unauthorized"));
+        return problemDetail;
+    }
+
+    @ExceptionHandler
+    public ProblemDetail handleEmailAlreadyExists(EmailAlreadyExistsException ex){
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                ex.getMessage()
+        );
+        problemDetail.setTitle("Email already in use");
+        problemDetail.setType(URI.create("https://api.example.com/errors/conflict"));
+        return problemDetail;
+    }
+
+    // Covers the race where two registrations pass the existsByEmail check together
+    @ExceptionHandler
+    public ProblemDetail handleDataIntegrity(DataIntegrityViolationException ex){
+        return handleEmailAlreadyExists(new EmailAlreadyExistsException("Email is already in use"));
+    }
+
+    @ExceptionHandler
+    public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException ex){
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "Request body is missing or malformed"
+        );
+        problemDetail.setTitle("Invalid input");
         return problemDetail;
     }
 

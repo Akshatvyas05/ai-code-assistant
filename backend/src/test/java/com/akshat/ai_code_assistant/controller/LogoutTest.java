@@ -31,7 +31,7 @@ class LogoutTest {
 
     private JsonNode register(String email) throws Exception {
         String body = mapper.writeValueAsString(java.util.Map.of(
-                "name", "Test User", "email", email, "password", "Passw0rd!123"));
+                "name", "Test User", "email", email, "password", "Passw0rd123"));
         String json = mockMvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
@@ -65,7 +65,7 @@ class LogoutTest {
 
         Thread.sleep(1100); // JWT iat has 1s resolution
 
-        String body = mapper.writeValueAsString(java.util.Map.of("email", email, "password", "Passw0rd!123"));
+        String body = mapper.writeValueAsString(java.util.Map.of("email", email, "password", "Passw0rd123"));
         String json = mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String fresh = "Bearer " + mapper.readTree(json).get("accessToken").asText();
