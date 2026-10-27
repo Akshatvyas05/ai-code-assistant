@@ -1,5 +1,7 @@
 package com.akshat.ai_code_assistant.config;
 
+import com.akshat.ai_code_assistant.entity.User;
+import com.akshat.ai_code_assistant.repository.UserRepository;
 import com.akshat.ai_code_assistant.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,9 +21,11 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService){
+    public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository){
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -37,6 +41,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if(jwtService.isTokenValid(jwt)){
             String email = jwtService.extractEmail(jwt);
+            if(issuedBeforeLogout(email, jwt)){
+                filterChain.doFilter(request, response);
+                return;
+            }
             UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                     email,
                     null,
@@ -46,5 +54,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean issuedBeforeLogout(String email, String jwt){
+        return userRepository.findByEmail(email)
+                .map(User::getTokensValidAfter)
+                .map(validAfter -> jwtService.extractIssuedAt(jwt).toInstant().getEpochSecond() <= validAfter.getEpochSecond())
+                .orElse(false);
     }
 }

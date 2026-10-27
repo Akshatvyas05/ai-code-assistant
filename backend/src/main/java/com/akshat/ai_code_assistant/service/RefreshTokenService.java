@@ -6,6 +6,7 @@ import com.akshat.ai_code_assistant.entity.RefreshToken;
 import com.akshat.ai_code_assistant.entity.User;
 import com.akshat.ai_code_assistant.exception.InvalidCredentialException;
 import com.akshat.ai_code_assistant.repository.RefreshTokenRepository;
+import com.akshat.ai_code_assistant.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,14 +19,16 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
+    private final UserRepository userRepository;
 
     // 7 days expiration in milliseconds
     @Value("${app.jwt.refresh-expiration-ms:604800000}")
     private long refreshTokenDurationMs;
 
-    public RefreshTokenService(RefreshTokenRepository refreshTokenRepository, JwtService jwtService) {
+    public RefreshTokenService(RefreshTokenRepository refreshTokenRepository, JwtService jwtService, UserRepository userRepository) {
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -39,6 +42,17 @@ public class RefreshTokenService {
                 user
         );
         return refreshTokenRepository.save(refreshToken);
+    }
+
+    /**
+     * Logout: delete all of the user's refresh tokens and invalidate every access
+     * token issued up to now.
+     */
+    @Transactional
+    public void logout(User user) {
+        refreshTokenRepository.deleteAllByUser(user);
+        user.setTokensValidAfter(Instant.now());
+        userRepository.save(user);
     }
 
     /**
