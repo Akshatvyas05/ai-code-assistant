@@ -4,6 +4,7 @@ import com.akshat.ai_code_assistant.exception.EmailAlreadyExistsException;
 import com.akshat.ai_code_assistant.exception.InvalidCredentialException;
 import com.akshat.ai_code_assistant.dto.AuthResponse;
 import com.akshat.ai_code_assistant.dto.LoginRequest;
+import com.akshat.ai_code_assistant.dto.RefreshTokenRequest;
 import com.akshat.ai_code_assistant.dto.RegisterRequest;
 import com.akshat.ai_code_assistant.dto.UserResponse;
 import com.akshat.ai_code_assistant.entity.RefreshToken;
@@ -65,6 +66,11 @@ public class AuthenticationController {
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(new AuthResponse(token, refreshToken.getToken(), response));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request){
+        return ResponseEntity.ok(refreshTokenService.rotateRefreshToken(request.refreshToken()));
     }
 
     @PostMapping("/logout")
