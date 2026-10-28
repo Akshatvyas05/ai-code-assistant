@@ -4,12 +4,7 @@ import com.akshat.ai_code_assistant.dto.AuthResponse;
 import com.akshat.ai_code_assistant.dto.LoginRequest;
 import com.akshat.ai_code_assistant.dto.RefreshTokenRequest;
 import com.akshat.ai_code_assistant.dto.RegisterRequest;
-import com.akshat.ai_code_assistant.dto.UserResponse;
-import com.akshat.ai_code_assistant.entity.RefreshToken;
-import com.akshat.ai_code_assistant.entity.User;
-import com.akshat.ai_code_assistant.repository.UserRepository;
-import com.akshat.ai_code_assistant.service.JwtService;
-import com.akshat.ai_code_assistant.service.RefreshTokenService;
+import com.akshat.ai_code_assistant.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -49,26 +44,17 @@ public class AuthenticationController {
     })
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> registerUser(@Valid @RequestBody RegisterRequest request){
-        String email = normalizeEmail(request.email());
-        if(userRepository.existsByEmail(email)){
-            throw new EmailAlreadyExistsException("Email is already in use");
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    }
 
-        var hashedPassword = passwordEncoder.encode(request.password());
-
-        User user = new User(request.name().trim(), email, hashedPassword);
-
-        User savedUser = userRepository.save(user);
-
-        UserResponse response = new UserResponse(
-                savedUser.getId(),
-                savedUser.getName(),
-                savedUser.getEmail(),
-                savedUser.getCreatedAt()
-        );
-        String token = jwtService.generateToken(savedUser.getEmail(), savedUser.getRole());
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
-
+    @Operation(summary = "Log in", description = "Verifies credentials and returns an access + refresh token.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Logged in"),
+            @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class), examples = @ExampleObject(value = """
+{"title":"Invalid input","status":400,"detail":"Validation failed for one or more fields","errors":{"email":"Invalid email format"}}"""))),
+            @ApiResponse(responseCode = "401", description = "Wrong email or password", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class), examples = @ExampleObject(value = """
+{"title":"Authentication Failed","status":401,"detail":"Invalid email or password"}""")))
+    })
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request){
         return ResponseEntity.ok(authService.login(request));
@@ -97,31 +83,5 @@ public class AuthenticationController {
     public ResponseEntity<Void> logout(Authentication authentication){
         authService.logout((String) authentication.getPrincipal());
         return ResponseEntity.noContent().build();
-    }
-
-    @Operation(summary = "Log in", description = "Verifies credentials and returns an access + refresh token.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Logged in"),
-            @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class), examples = @ExampleObject(value = """
-{"title":"Invalid input","status":400,"detail":"Validation failed for one or more fields","errors":{"email":"Invalid email format"}}"""))),
-            @ApiResponse(responseCode = "401", description = "Wrong email or password", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class), examples = @ExampleObject(value = """
-{"title":"Authentication Failed","status":401,"detail":"Invalid email or password"}""")))
-    })
-    @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request){
-        User user = userRepository.findByEmail(normalizeEmail(request.email())).orElseThrow(()-> new InvalidCredentialException("Invalid email or password"));
-
-        if(!passwordEncoder.matches(request.password(), user.getPassword())) throw new InvalidCredentialException("Invalid email or password");
-
-        UserResponse response = new UserResponse(
-                user.getId(),
-                user.getName(),
-                user.getEmail(),
-                user.getCreatedAt()
-        );
-        String token = jwtService.generateToken(user.getEmail(), user.getRole());
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
-
-        return ResponseEntity.ok(new AuthResponse(token, refreshToken.getToken(), response));
     }
 }
