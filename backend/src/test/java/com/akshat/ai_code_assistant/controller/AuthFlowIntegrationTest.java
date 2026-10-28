@@ -1,14 +1,13 @@
 package com.akshat.ai_code_assistant.controller;
 
-import com.akshat.ai_code_assistant.service.JwtService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.JsonNode;
@@ -28,8 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthFlowIntegrationTest {
 
     private static final String PASSWORD = "Passw0rd123";
-    // Read from JwtService so the test needs no copy of the signing key
-    private static final String SERVICE_SECRET = (String) ReflectionTestUtils.getField(JwtService.class, "SECRET_KEY");
+
+    @Value("${app.jwt.secret}")
+    String serviceSecret;
 
     @Autowired
     MockMvc mockMvc;
@@ -113,7 +113,7 @@ class AuthFlowIntegrationTest {
         me(token(email, "a-completely-different-secret-key-0123456789", 60_000)).andExpect(status().isUnauthorized());
 
         // correctly signed but already expired
-        me(token(email, SERVICE_SECRET, -60_000)).andExpect(status().isUnauthorized());
+        me(token(email, serviceSecret, -60_000)).andExpect(status().isUnauthorized());
     }
 
     private String token(String email, String secret, long ttlMs) {
