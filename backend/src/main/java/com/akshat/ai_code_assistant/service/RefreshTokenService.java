@@ -1,7 +1,5 @@
 package com.akshat.ai_code_assistant.service;
 
-import com.akshat.ai_code_assistant.dto.AuthResponse;
-import com.akshat.ai_code_assistant.dto.UserResponse;
 import com.akshat.ai_code_assistant.entity.RefreshToken;
 import com.akshat.ai_code_assistant.entity.User;
 import com.akshat.ai_code_assistant.exception.InvalidCredentialException;
@@ -18,16 +16,14 @@ import java.util.UUID;
 public class RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
-    private final JwtService jwtService;
     private final UserRepository userRepository;
 
     // 7 days expiration in milliseconds
     @Value("${app.jwt.refresh-expiration-ms:604800000}")
     private long refreshTokenDurationMs;
 
-    public RefreshTokenService(RefreshTokenRepository refreshTokenRepository, JwtService jwtService, UserRepository userRepository) {
+    public RefreshTokenService(RefreshTokenRepository refreshTokenRepository, UserRepository userRepository) {
         this.refreshTokenRepository = refreshTokenRepository;
-        this.jwtService = jwtService;
         this.userRepository = userRepository;
     }
 
@@ -56,11 +52,12 @@ public class RefreshTokenService {
     }
 
     /**
-     * Rotate Refresh Token: Revoke current token, check reuse, issue new pair
+     * Rotate a refresh token: reject unknown/reused/expired tokens, revoke the
+     * presented one and return its replacement. Callers issue the access token.
      */
     // noRollbackFor: the reuse/expiry branches delete tokens and then throw; the deletes must commit
     @Transactional(noRollbackFor = InvalidCredentialException.class)
-    public AuthResponse rotateRefreshToken(String requestToken) {
+    public RefreshToken rotateRefreshToken(String requestToken) {
         RefreshToken token = refreshTokenRepository.findByToken(requestToken)
                 .orElseThrow(() -> new InvalidCredentialException("Invalid or expired refresh token"));
 
@@ -77,23 +74,9 @@ public class RefreshTokenService {
             throw new InvalidCredentialException("Refresh token has expired. Please log in again.");
         }
 
-        User user = token.getUser();
-
-        // 3. ROTATE: Mark current refresh token as revoked
+        // 3. ROTATE: Mark current refresh token as revoked, issue its replacement
         token.setRevoked(true);
         refreshTokenRepository.save(token);
-
-        // 4. ISSUE NEW TOKENS
-        String newAccessToken = jwtService.generateToken(user.getEmail(), user.getRole());
-        RefreshToken newRefreshToken = createRefreshToken(user);
-
-        UserResponse userResponse = new UserResponse(
-                user.getId(),
-                user.getName(),
-                user.getEmail(),
-                user.getCreatedAt()
-        );
-
-        return new AuthResponse(newAccessToken, newRefreshToken.getToken(), userResponse);
+        return createRefreshToken(token.getUser());
     }
 }
