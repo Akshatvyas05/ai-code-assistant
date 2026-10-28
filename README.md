@@ -185,6 +185,9 @@ Generate a secret with `openssl rand -base64 48`, then run with
 
 ## API reference
 
+Interactive docs (Swagger UI) are served at `http://localhost:8080/swagger-ui/index.html`; the raw
+OpenAPI spec is at `/v3/api-docs`. Use **Authorize** with an access token to try `/auth/logout`.
+
 ### `POST /auth/register`
 
 ```json
