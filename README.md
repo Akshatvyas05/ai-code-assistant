@@ -171,16 +171,22 @@ commit real secrets.** The following should be externalized before any deploymen
 | `server.port` | `8080` | |
 | `spring.datasource.url` | `jdbc:postgresql://localhost:5432/demo_db` | |
 | `spring.datasource.username` / `.password` | `postgres` / `postgres` | Move to env vars |
-| `app.jwt.refresh-expiration-ms` | `604800000` (7 days) | Used by `RefreshTokenService` |
+| `app.jwt.secret` | **required** (env `JWT_SECRET`) | HS256 signing key, at least 32 characters. The app refuses to start without it. |
+| `app.jwt.expiration-ms` | `900000` (15 min), env `JWT_EXPIRATION_MS` | Access-token lifetime |
+| `app.jwt.refresh-expiration-ms` | `604800000` (7 days), env `JWT_REFRESH_EXPIRATION_MS` | Used by `RefreshTokenService` |
 
-> **Known issue:** the JWT signing secret and access-token TTL (120 s) are
-> currently hard-coded in `JwtService`. Externalizing them is part of the
-> security hardening work — see the plan and [#10](https://github.com/Akshatvyas05/ai-code-assistant/issues/10) /
-> [#23](https://github.com/Akshatvyas05/ai-code-assistant/issues/23).
+Generate a secret with `openssl rand -base64 48`, then run with
+`JWT_SECRET=... ./gradlew bootRun`.
+
+> **Rotate the old secret:** the previous hard-coded signing key is in git history.
+> Treat it as compromised and never reuse it.
 
 ---
 
 ## API reference
+
+Interactive docs (Swagger UI) are served at `http://localhost:8080/swagger-ui/index.html`; the raw
+OpenAPI spec is at `/v3/api-docs`. Use **Authorize** with an access token to try `/auth/logout`.
 
 ### `POST /auth/register`
 

@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import com.akshat.ai_code_assistant.entity.Role;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -13,11 +14,23 @@ import java.util.Date;
 @Service
 public class JwtService {
 
-    private static final String SECRET_KEY = "yZ0ZuTOeFOPWvNmiaV6vK0lNDveXNbMITSq3WVOoS7E";
-    private static final long EXPIRATION_TIME = 120000;
+    private static final int MIN_SECRET_BYTES = 32;
+
+    private final SecretKey signingKey;
+    private final long expirationMs;
+
+    public JwtService(@Value("${app.jwt.secret}") String secret,
+                      @Value("${app.jwt.expiration-ms}") long expirationMs){
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if(keyBytes.length < MIN_SECRET_BYTES){
+            throw new IllegalStateException("app.jwt.secret must be at least " + MIN_SECRET_BYTES + " bytes");
+        }
+        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
+        this.expirationMs = expirationMs;
+    }
 
     private SecretKey getSigningKey(){
-        return Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+        return signingKey;
     }
 
     public String generateToken(String email, Role role){
@@ -25,7 +38,7 @@ public class JwtService {
                 .subject(email)
                 .claim("role", role.name())
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+                .expiration(new Date(System.currentTimeMillis() + expirationMs))
                 .signWith(getSigningKey())
                 .compact();
     }
