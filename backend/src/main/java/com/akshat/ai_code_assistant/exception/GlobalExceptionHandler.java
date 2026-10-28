@@ -15,24 +15,22 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static ProblemDetail problem(HttpStatus status, String title, String detail){
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, detail);
+        problemDetail.setTitle(title);
+        return problemDetail;
+    }
+
     @ExceptionHandler
     public ProblemDetail handleInvalidCredentials(InvalidCredentialException ex){
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.UNAUTHORIZED,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Authentication Failed");
+        ProblemDetail problemDetail = problem(HttpStatus.UNAUTHORIZED, "Authentication Failed", ex.getMessage());
         problemDetail.setType(URI.create("https://api.example.com/errors/unauthorized"));
         return problemDetail;
     }
 
     @ExceptionHandler
     public ProblemDetail handleEmailAlreadyExists(EmailAlreadyExistsException ex){
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT,
-                ex.getMessage()
-        );
-        problemDetail.setTitle("Email already in use");
+        ProblemDetail problemDetail = problem(HttpStatus.CONFLICT, "Email already in use", ex.getMessage());
         problemDetail.setType(URI.create("https://api.example.com/errors/conflict"));
         return problemDetail;
     }
@@ -45,12 +43,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler
     public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException ex){
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                "Request body is missing or malformed"
-        );
-        problemDetail.setTitle("Invalid input");
-        return problemDetail;
+        return problem(HttpStatus.BAD_REQUEST, "Invalid input", "Request body is missing or malformed");
     }
 
     @ExceptionHandler
@@ -58,12 +51,7 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(error ->
                 errors.put(error.getField(), error.getDefaultMessage()));
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                "Validation failed for one or more fields"
-        );
-
-        problemDetail.setTitle("Invalid input");
+        ProblemDetail problemDetail = problem(HttpStatus.BAD_REQUEST, "Invalid input", "Validation failed for one or more fields");
         problemDetail.setProperty("errors", errors);
         return problemDetail;
     }

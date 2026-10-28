@@ -1,6 +1,6 @@
 # AI Code Assistant — Design & Development Plan
 
-_Last updated: 2026-09-07_
+_Last updated: 2026-10-28_
 
 This document is the single source of truth for **what we are building, why, and in
 what order**. It maps every planned unit of work to an existing GitHub issue and
@@ -61,20 +61,22 @@ Implemented and merged to `main`:
 | Component | File(s) | Notes |
 |-----------|---------|-------|
 | App entrypoint | `AiCodeAssistantApplication.java` | Spring Boot 4.1.0, Java 21 |
-| Registration | `AuthenticationController#registerUser` | BCrypt via `PasswordEncoder`, duplicate-email → `409`. Returns raw string on conflict — **to be migrated to `ProblemDetail`**. |
-| Login | `AuthenticationController#login` | Verifies BCrypt hash, issues access token. |
-| Access tokens | `JwtService` | HS256, **hard-coded secret**, **120 s TTL**. Both must move to config. |
-| Security chain | `SecurityConfig`, `JwtAuthenticationFilter` | Stateless-ish; `/auth/**` and `/actuator/**` public, everything else authenticated. CSRF disabled. No explicit `SessionCreationPolicy.STATELESS` yet. No authorities loaded (empty list). |
-| Refresh tokens | `RefreshTokenService`, `RefreshToken` entity, `RefreshTokenRepository` | Rotation + reuse-detection logic is written and sound. **Not called anywhere** — no `/auth/refresh` endpoint, and login/register never create a refresh token (so `AuthResponse.refreshToken` is always `null`). |
-| Error handling | `GlobalExceptionHandler` | RFC 7807 `ProblemDetail` for `InvalidCredentialException` and validation errors. |
-| Validation | `RegisterRequest`, `LoginRequest`, `RefreshTokenRequest` | `jakarta.validation` on records. |
+| Auth orchestration | `AuthService`, `AuthenticationController` | Controller is a thin adapter; `AuthService` owns register / login / refresh / logout and issues the access + refresh token pair. |
+| Passwords | `AuthService`, `SecurityConfig#passwordEncoder` | BCrypt; emails trimmed + lowercased; unknown-email login verifies against a dummy hash (see D-11). |
+| Access tokens | `JwtService` | HS256 JWT carrying `sub` (email) and `role`; secret and TTL come from config (`JWT_SECRET`, default TTL 15 min) once #66 lands. |
+| Security chain | `SecurityConfig`, `JwtAuthenticationFilter` | Stateless sessions, `ROLE_*` authority from the token, `/admin/**` requires `ADMIN`, 401 entry point. Filter rejects tokens issued before the user's `tokens_valid_after`. |
+| Refresh tokens | `RefreshTokenService`, `RefreshToken`, `RefreshTokenRepository` | Opaque UUID, rotated on every use with reuse detection; row-locked lookup so concurrent refreshes cannot both win. |
+| Logout | `RefreshTokenService#logout` | Deletes all refresh tokens and sets `tokens_valid_after` (log out everywhere). |
+| Error handling | `GlobalExceptionHandler` | RFC 7807 `ProblemDetail` for 400 (validation, malformed body), 401, 409. |
+| Validation | `RegisterRequest`, `LoginRequest`, `RefreshTokenRequest` | `jakarta.validation`: email shape, 8-72 char password with a letter and digit. |
+| API docs | `OpenApiConfig`, springdoc | Swagger UI at `/swagger-ui/index.html` once #67 lands. |
 | Protected sample | `TestController#getAuthenticatedUser` | `GET /test/me`. |
 | Health | Actuator | `GET /actuator/health` with details. |
 | Persistence | `application.properties` | Postgres, `ddl-auto=update`, `show-sql=true`. No migrations. |
 
 Not started: Kafka, Redis, LLM integration, review/upload endpoints, results
 storage, SSE, the entire frontend, Docker Compose, CI, deployment config, tests
-beyond the generated context-load test.
+beyond the auth test suite (H2-backed MockMvc tests).
 
 **Branch note:** `origin/feature/redis` is a stale spike that removes the
 refresh-token code present on `main`; do not build on it. `origin/feature/issue#1`
@@ -145,15 +147,15 @@ Indexes: `(user_id, created_at desc)` for history, `(code_hash)` for cache backf
 |---------------|------|--------|-------|
 | `POST /auth/register` | public | ✅ done | — |
 | `POST /auth/login` | public | ✅ done | — |
-| `POST /auth/refresh` | public (refresh token in body) | ⚠️ service ready, endpoint missing | [#4](https://github.com/Akshatvyas05/ai-code-assistant/issues/4) follow-up |
-| `POST /auth/logout` | bearer | ❌ | [#6](https://github.com/Akshatvyas05/ai-code-assistant/issues/6) |
+| `POST /auth/refresh` | public (refresh token in body) | ✅ done | — |
+| `POST /auth/logout` | bearer | ✅ done | — |
 | `GET /actuator/health` | public | ✅ done | — |
 | `GET /test/me` | bearer | ✅ done (remove before v1) | — |
 | `POST /review/upload` | bearer | ❌ | [#13](https://github.com/Akshatvyas05/ai-code-assistant/issues/13) |
 | `GET /review/{id}` | bearer, owner only | ❌ | [#20](https://github.com/Akshatvyas05/ai-code-assistant/issues/20) |
 | `GET /review/{id}/stream` | bearer, owner only | ❌ SSE | [#21](https://github.com/Akshatvyas05/ai-code-assistant/issues/21), [#26](https://github.com/Akshatvyas05/ai-code-assistant/issues/26) |
 | `GET /review` (history) | bearer | ❌ | frontend phase |
-| OpenAPI / Swagger UI | public in dev | ❌ | [#9](https://github.com/Akshatvyas05/ai-code-assistant/issues/9) |
+| OpenAPI / Swagger UI | public in dev | ⚠️ in review | [#9](https://github.com/Akshatvyas05/ai-code-assistant/issues/9) |
 
 All error responses use RFC 7807 `ProblemDetail`. Rate-limited submissions return
 `429` with a `Retry-After` header ([#18](https://github.com/Akshatvyas05/ai-code-assistant/issues/18)).
@@ -172,6 +174,70 @@ All error responses use RFC 7807 `ProblemDetail`. Rate-limited submissions retur
 | D-8 | **LLM provider behind a `CodeReviewer` interface** | Keeps the consumer testable (fake in tests) and swappable; only one impl wired for v1 | Call the SDK directly from the consumer (untestable, locked in) |
 | D-9 | **Config & secrets via environment variables / `@ConfigurationProperties`** | The hard-coded JWT secret is a real vulnerability; also needed for deployment | Keep values in `application.properties` (leaks secrets, no per-env config) |
 | D-10 | **Docker Compose for local infra** | Postgres + Kafka + Redis by hand is a barrier to contribution and to your own re-setup | Document manual install steps only |
+
+### 7.1 Auth module rationale (#10)
+
+**D-11 Password hashing: BCrypt via Spring's `PasswordEncoder`.**
+Passwords are stored only as salted, adaptive hashes (default work factor 10), so a
+database leak does not directly expose them and the cost can be raised as hardware
+improves. BCrypt truncates input at 72 bytes, hence the 72-character maximum in
+`RegisterRequest` (silently truncating would let two different long passwords
+collide). Login verifies against a dummy hash when the email is unknown, so "no such
+user" and "wrong password" take the same time and return the same 401 body; otherwise
+response time would reveal which emails are registered. _Rejected:_ SHA-256 / MD5
+(fast, so brute-forceable); Argon2 or scrypt (stronger memory-hardness, but need an
+extra dependency and tuning; BCrypt is the defensible default for v1 and the encoder
+is behind an interface, so switching is a one-bean change with hash upgrade on login).
+
+**D-12 Access tokens: short-lived HS256 JWT.**
+The token carries `sub` (email), `role`, `iat`, `exp`, so request authorization needs
+no session store. HS256 (one shared secret) is enough because a single service both
+issues and verifies tokens; asymmetric RS256/EdDSA only pays off when other services
+must verify tokens without being able to mint them, which is not a v1 requirement.
+The secret comes from `JWT_SECRET` (min 32 bytes, startup fails otherwise) and the
+TTL defaults to 15 minutes, which bounds the damage of a leaked access token.
+_Rejected:_ server-side sessions (state and sticky sessions); long-lived JWTs (cannot
+be revoked); RS256 now (key management with no consumer for it).
+
+**D-13 Refresh tokens: opaque, stored, rotated on every use.**
+A refresh token is a random UUID row in `refresh_tokens`, so unlike a JWT it can be
+revoked server-side. Each use revokes the presented token and issues a new one. If a
+revoked token is presented again, it was stolen or replayed, so all of that user's
+refresh tokens are deleted (D-3). The reuse and expiry branches delete rows and then
+throw, so `rotateRefreshToken` is `noRollbackFor = InvalidCredentialException`;
+without it the exception rolled back the deletes and reuse detection did nothing. The
+token lookup takes a row lock, so two concurrent refreshes of the same token cannot
+both succeed. _Rejected:_ non-rotating refresh tokens (a stolen one works until
+expiry, with no theft signal).
+
+**D-14 Logout is "log out everywhere".**
+`POST /auth/logout` deletes all of the user's refresh tokens and records
+`users.tokens_valid_after`; the JWT filter rejects any access token whose `iat` is at
+or before it. This makes logout immediate for access tokens too, at the cost of one
+indexed user lookup per request. JWT `iat` has one-second resolution, so a token
+issued in the same second as the logout is also rejected. _Rejected:_ relying on the
+short TTL alone (a stolen token would survive logout for up to 15 minutes); a
+per-token denylist (needs shared storage; revisit with Redis if per-device logout is
+required).
+
+**D-15 Emails are normalized (trim + lowercase) on register and login.**
+Otherwise `Jane@x.com` and `jane@x.com` are different accounts, which allows
+look-alike duplicates and failed logins.
+
+**Open follow-ups found during the review (not done here):**
+- Store refresh tokens hashed (SHA-256) so a database leak does not yield usable
+  tokens. Needs a one-time invalidation of existing tokens.
+- Purge expired and revoked refresh tokens on a schedule; today they are removed only
+  when presented.
+- `GlobalExceptionHandler` maps any `DataIntegrityViolationException` to "email
+  already in use". Narrow it to the users email constraint before other unique
+  constraints exist.
+- `JwtService#extractRole` throws on an unknown role string, which would surface as a
+  500; treat an unrecognised role as an invalid token.
+- Rate-limit `/auth/login` and `/auth/register` per IP (#18 covers review
+  submissions only).
+- `GET /test/me` and the `ADMIN` role have no production use yet; remove or replace
+  before v1. There is no way to create an admin other than editing the database.
 
 ## 8. Development phases
 

@@ -1,7 +1,5 @@
 package com.akshat.ai_code_assistant.controller;
 
-import com.akshat.ai_code_assistant.exception.EmailAlreadyExistsException;
-import com.akshat.ai_code_assistant.exception.InvalidCredentialException;
 import com.akshat.ai_code_assistant.dto.AuthResponse;
 import com.akshat.ai_code_assistant.dto.LoginRequest;
 import com.akshat.ai_code_assistant.dto.RefreshTokenRequest;
@@ -21,12 +19,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.Locale;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,20 +33,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Authentication", description = "Register, log in, refresh and log out")
 public class AuthenticationController {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
-    private final RefreshTokenService refreshTokenService;
+    private final AuthService authService;
 
-    public AuthenticationController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService, RefreshTokenService refreshTokenService){
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
-        this.refreshTokenService = refreshTokenService;
-    }
-
-    private static String normalizeEmail(String email){
-        return email.trim().toLowerCase(Locale.ROOT);
+    public AuthenticationController(AuthService authService){
+        this.authService = authService;
     }
 
     @Operation(summary = "Register a new user", description = "Creates an account and returns an access + refresh token. Email is trimmed and lowercased.")
@@ -83,7 +69,9 @@ public class AuthenticationController {
         String token = jwtService.generateToken(savedUser.getEmail(), savedUser.getRole());
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(new AuthResponse(token, refreshToken.getToken(), response));
+    @PostMapping("/login")
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request){
+        return ResponseEntity.ok(authService.login(request));
     }
 
     @Operation(summary = "Rotate a refresh token", description = "Exchanges a valid refresh token for a new access + refresh token. The old refresh token is revoked; reusing it revokes all of the user's tokens.")
@@ -96,7 +84,7 @@ public class AuthenticationController {
     })
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request){
-        return ResponseEntity.ok(refreshTokenService.rotateRefreshToken(request.refreshToken()));
+        return ResponseEntity.ok(authService.refresh(request.refreshToken()));
     }
 
     @Operation(summary = "Log out everywhere", description = "Deletes all of the caller's refresh tokens and invalidates every access token issued so far.",
@@ -107,9 +95,7 @@ public class AuthenticationController {
     })
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(Authentication authentication){
-        User user = userRepository.findByEmail((String) authentication.getPrincipal())
-                .orElseThrow(() -> new InvalidCredentialException("Invalid email or password"));
-        refreshTokenService.logout(user);
+        authService.logout((String) authentication.getPrincipal());
         return ResponseEntity.noContent().build();
     }
 
